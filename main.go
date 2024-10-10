@@ -175,7 +175,7 @@ func mainWithExitCode() exitCode {
 	// Network operations to CA start here
 	var rep reporter.Reporter
 	// Connect to the collection agent
-	rep = reporter.NewChannelReporter("", make(chan *reporter.CompleteTrace))
+	rep = reporter.NewChannelReporter("", make(chan *reporter.CompleteTrace, 1000))
 	metrics.SetReporter(rep)
 
 	// Now that set the initial host metadata, start a goroutine to keep sending updates regularly.
@@ -209,6 +209,7 @@ func mainWithExitCode() exitCode {
 	log.Debug("Completed initial PID listing")
 
 	if args.externallyManaged {
+		fmt.Println("Externally managed mode")
 		go trc.CreateSocket()
 	} else {
 		// Attach our tracer to the perf event

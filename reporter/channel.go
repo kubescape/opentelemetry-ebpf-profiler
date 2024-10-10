@@ -58,5 +58,7 @@ func (r *ChannelReporter) FrameMetadata(fileID libpf.FileID, addressOrLine libpf
 }
 func (r *ChannelReporter) ReportHostMetadata(metadataMap map[string]string) {}
 func (r *ChannelReporter) ReportHostMetadataBlocking(ctx context.Context, metadataMap map[string]string, maxRetries int, waitRetry time.Duration) error {
+	return nil
 }
+
 func (r *ChannelReporter) ReportMetrics(timestamp uint32, ids []uint32, values []int64) {}

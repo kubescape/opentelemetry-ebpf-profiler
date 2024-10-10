@@ -8,14 +8,27 @@ import (
 	"go.opentelemetry.io/ebpf-profiler/libpf"
 )
 
+type Symbol struct {
+	lineNumber     libpf.SourceLineno
+	functionOffset uint32
+	functionName   string
+	filePath       string
+}
+
+type SymbolizedTrace struct {
+	libpf.Trace
+	symbolMap map[libpf.AddressOrLineno]*Symbol
+}
+
 type CompleteTrace struct {
-	Trace *libpf.Trace
+	Trace *SymbolizedTrace
 	Meta  *TraceEventMeta
 }
 
 type ChannelReporter struct {
-	name   string
-	traces chan *CompleteTrace
+	name      string
+	traces    chan *CompleteTrace
+	symbolMap map[libpf.AddressOrLineno]*Symbol
 }
 
 func NewChannelReporter(name string, traces chan *CompleteTrace) *ChannelReporter {
@@ -28,13 +41,43 @@ func NewChannelReporter(name string, traces chan *CompleteTrace) *ChannelReporte
 var _ Reporter = (*ChannelReporter)(nil)
 
 func (r *ChannelReporter) ReportTraceEvent(trace *libpf.Trace, meta *TraceEventMeta) {
-	fmt.Println("ChannelReporter: ReportTraceEvent")
+	symbolTrace := &SymbolizedTrace{}
+	symbolTrace.Trace = *trace
+	symbolTrace.symbolMap = nil
+	for i := range trace.Linenos {
+		if symbol := r.symbolMap[trace.Linenos[i]]; symbol != nil {
+			symbolTrace.symbolMap[trace.Linenos[i]] = symbol
+			delete(r.symbolMap, trace.Linenos[i])
+		}
+	}
+
 	new_trace := &CompleteTrace{
-		Trace: trace,
+		Trace: symbolTrace,
 		Meta:  meta,
 	}
 
 	r.traces <- new_trace
+}
+
+func (r *ChannelReporter) FrameMetadata(fileID libpf.FileID, addressOrLine libpf.AddressOrLineno, lineNumber libpf.SourceLineno, functionOffset uint32, functionName, filePath string) {
+	r.symbolMap[addressOrLine] = &Symbol{
+		lineNumber:     lineNumber,
+		functionOffset: functionOffset,
+		functionName:   functionName,
+		filePath:       filePath,
+	}
+}
+
+func (r *ChannelReporter) SpendChannel() {
+	for {
+		new_trace := <-r.traces
+		if new_trace.Trace.symbolMap != nil {
+			fmt.Println("Trace: ", new_trace.Trace)
+			for addressOrLine, symbol := range new_trace.Trace.symbolMap {
+				fmt.Println("AddressOrLine: ", addressOrLine, "Symbol: ", symbol.functionName, ":", symbol.lineNumber, ":", symbol.filePath)
+			}
+		}
+	}
 }
 
 func (r *ChannelReporter) SupportsReportTraceEvent() bool {
@@ -53,9 +96,9 @@ func (r *ChannelReporter) GetMetrics() Metrics {
 }
 
 func (r *ChannelReporter) ReportFallbackSymbol(frameID libpf.FrameID, symbol string) {}
-func (r *ChannelReporter) ExecutableMetadata(args *ExecutableMetadataArgs)           {}
-func (r *ChannelReporter) FrameMetadata(fileID libpf.FileID, addressOrLine libpf.AddressOrLineno, lineNumber libpf.SourceLineno, functionOffset uint32, functionName, filePath string) {
-}
+
+func (r *ChannelReporter) ExecutableMetadata(args *ExecutableMetadataArgs) {}
+
 func (r *ChannelReporter) ReportHostMetadata(metadataMap map[string]string) {}
 func (r *ChannelReporter) ReportHostMetadataBlocking(ctx context.Context, metadataMap map[string]string, maxRetries int, waitRetry time.Duration) error {
 	return nil

@@ -1238,6 +1238,6 @@ func (t *Tracer) CreateSocket() error {
 		if _, _, err := conn.WriteMsgUnix(nil, rights, nil); err != nil {
 			return err
 		}
-		log.Infof("Sent fd %d to client", fd)
+		log.Infof("Sent fd %d to client", uint32(fd))
 	}
 }

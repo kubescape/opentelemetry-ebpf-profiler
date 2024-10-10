@@ -176,6 +176,7 @@ func mainWithExitCode() exitCode {
 	var rep reporter.Reporter
 	// Connect to the collection agent
 	rep = reporter.NewChannelReporter("", make(chan *reporter.CompleteTrace, 1000))
+	go rep.(*reporter.ChannelReporter).SpendChannel()
 	metrics.SetReporter(rep)
 
 	// Now that set the initial host metadata, start a goroutine to keep sending updates regularly.

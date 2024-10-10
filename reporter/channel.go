@@ -33,8 +33,9 @@ type ChannelReporter struct {
 
 func NewChannelReporter(name string, traces chan *CompleteTrace) *ChannelReporter {
 	return &ChannelReporter{
-		name:   name,
-		traces: traces,
+		name:      name,
+		traces:    traces,
+		symbolMap: make(map[libpf.AddressOrLineno]*Symbol),
 	}
 }
 
@@ -45,7 +46,8 @@ func (r *ChannelReporter) ReportTraceEvent(trace *libpf.Trace, meta *TraceEventM
 	symbolTrace.Trace = *trace
 	symbolTrace.symbolMap = nil
 	for i := range trace.Linenos {
-		if symbol := r.symbolMap[trace.Linenos[i]]; symbol != nil {
+		if symbol, exists := r.symbolMap[trace.Linenos[i]]; exists {
+			symbolTrace.symbolMap = make(map[libpf.AddressOrLineno]*Symbol)
 			symbolTrace.symbolMap[trace.Linenos[i]] = symbol
 			delete(r.symbolMap, trace.Linenos[i])
 		}
@@ -72,10 +74,11 @@ func (r *ChannelReporter) SpendChannel() {
 	for {
 		new_trace := <-r.traces
 		if new_trace.Trace.symbolMap != nil {
-			fmt.Println("Trace: ", new_trace.Trace)
+			fmt.Println("Comm: ", new_trace.Meta.Comm, "Pid:", new_trace.Meta.PID, "Tid:", new_trace.Meta.TID, "Timestamp:", new_trace.Meta.Timestamp)
 			for addressOrLine, symbol := range new_trace.Trace.symbolMap {
 				fmt.Println("AddressOrLine: ", addressOrLine, "Symbol: ", symbol.functionName, ":", symbol.lineNumber, ":", symbol.filePath)
 			}
+			fmt.Println('-' * 50)
 		}
 	}
 }

@@ -175,25 +175,7 @@ func mainWithExitCode() exitCode {
 	// Network operations to CA start here
 	var rep reporter.Reporter
 	// Connect to the collection agent
-	rep, err = reporter.Start(mainCtx, &reporter.Config{
-		CollAgentAddr:          args.collAgentAddr,
-		DisableTLS:             args.disableTLS,
-		MaxRPCMsgSize:          32 << 20, // 32 MiB
-		MaxGRPCRetries:         5,
-		GRPCOperationTimeout:   intervals.GRPCOperationTimeout(),
-		GRPCStartupBackoffTime: intervals.GRPCStartupBackoffTime(),
-		GRPCConnectionTimeout:  intervals.GRPCConnectionTimeout(),
-		ReportInterval:         intervals.ReportInterval(),
-		CacheSize:              traceHandlerCacheSize,
-		SamplesPerSecond:       args.samplesPerSecond,
-		KernelVersion:          kernelVersion,
-		HostName:               hostname,
-		IPAddress:              sourceIP,
-	})
-	if err != nil {
-		return failure("Failed to start reporting: %v", err)
-	}
-
+	rep = reporter.NewChannelReporter("", make(chan *reporter.CompleteTrace))
 	metrics.SetReporter(rep)
 
 	// Now that set the initial host metadata, start a goroutine to keep sending updates regularly.

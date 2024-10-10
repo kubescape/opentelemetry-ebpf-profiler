@@ -42,12 +42,13 @@ func NewChannelReporter(name string, traces chan *CompleteTrace) *ChannelReporte
 var _ Reporter = (*ChannelReporter)(nil)
 
 func (r *ChannelReporter) ReportTraceEvent(trace *libpf.Trace, meta *TraceEventMeta) {
-	symbolTrace := &SymbolizedTrace{}
-	symbolTrace.Trace = *trace
-	symbolTrace.symbolMap = nil
+	symbolTrace := &SymbolizedTrace{
+		Trace:     *trace,
+		symbolMap: make(map[libpf.AddressOrLineno]*Symbol),
+	}
+
 	for i := range trace.Linenos {
 		if symbol, exists := r.symbolMap[trace.Linenos[i]]; exists {
-			symbolTrace.symbolMap = make(map[libpf.AddressOrLineno]*Symbol)
 			symbolTrace.symbolMap[trace.Linenos[i]] = symbol
 			delete(r.symbolMap, trace.Linenos[i])
 		}
@@ -71,14 +72,15 @@ func (r *ChannelReporter) FrameMetadata(fileID libpf.FileID, addressOrLine libpf
 }
 
 func (r *ChannelReporter) SpendChannel() {
+	var new_trace *CompleteTrace
 	for {
-		new_trace := <-r.traces
-		if new_trace.Trace.symbolMap != nil {
+		new_trace = <-r.traces
+		if len(new_trace.Trace.symbolMap) > 0 {
 			fmt.Println("Comm: ", new_trace.Meta.Comm, "Pid:", new_trace.Meta.PID, "Tid:", new_trace.Meta.TID, "Timestamp:", new_trace.Meta.Timestamp)
 			for addressOrLine, symbol := range new_trace.Trace.symbolMap {
-				fmt.Println("AddressOrLine: ", addressOrLine, "Symbol: ", symbol.functionName, ":", symbol.lineNumber, ":", symbol.filePath)
+				fmt.Println("AddressOrLine: ", addressOrLine, "Function: ", symbol.functionName, "Line:", symbol.lineNumber, "File:", symbol.filePath)
 			}
-			fmt.Println('-' * 50)
+			fmt.Println("------------------------------------------------")
 		}
 	}
 }

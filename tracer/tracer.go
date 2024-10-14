@@ -646,7 +646,7 @@ func (t *Tracer) populatePIDs(ctx context.Context) error {
 				case <-ctx.Done():
 					return nil
 				case t.pidEvents <- pid:
-					continue
+					goto next_pid
 				default:
 					// Workaround to implement a non blocking send to a channel.
 					// To avoid a busy loop on this non blocking channel send operation
@@ -654,6 +654,7 @@ func (t *Tracer) populatePIDs(ctx context.Context) error {
 					time.Sleep(50 * time.Millisecond)
 				}
 			}
+		next_pid:
 		}
 	}
 }

@@ -956,6 +956,7 @@ func (t *Tracer) StartMapMonitors(ctx context.Context, traceOutChan chan *host.T
 
 	startPollingPerfEventMonitor(ctx, t.ebpfMaps["trace_events"], t.intervals.TracePollInterval(),
 		t.samplesPerSecond*int(unsafe.Sizeof(C.Trace{})), func(rawTrace []byte) {
+			fmt.Println("Added trace")
 			traceOutChan <- t.loadBpfTrace(rawTrace)
 		})
 

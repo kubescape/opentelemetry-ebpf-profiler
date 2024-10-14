@@ -216,7 +216,6 @@ func (pm *ProcessManager) symbolizeFrame(frame int, trace *host.Trace,
 
 func (pm *ProcessManager) ConvertTrace(trace *host.Trace) (newTrace *libpf.Trace) {
 	traceLen := len(trace.Frames)
-	fmt.Println("Convert trace")
 	newTrace = &libpf.Trace{
 		Files:      make([]libpf.FileID, 0, traceLen),
 		Linenos:    make([]libpf.AddressOrLineno, 0, traceLen),

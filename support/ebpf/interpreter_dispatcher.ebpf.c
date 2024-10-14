@@ -73,7 +73,7 @@ bpf_map_def SEC("maps") reported_pids = {
 // (process new, process exit, unknown PC) within a map monitor/processing interval,
 // that we would like to support.
 bpf_map_def SEC("maps") pid_events = {
-  .type = BPF_MAP_TYPE_HASH,
+  .type = BPF_MAP_TYPE_HASH, 
   .key_size = sizeof(u32),
   .value_size = sizeof(bool),
   .max_entries = 65536,

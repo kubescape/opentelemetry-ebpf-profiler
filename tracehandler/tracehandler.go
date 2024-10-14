@@ -118,7 +118,6 @@ func newTraceHandler(rep reporter.TraceReporter, traceProcessor TraceProcessor,
 }
 
 func (m *traceHandler) HandleTrace(bpfTrace *host.Trace) {
-	fmt.Println("Handling trace")
 	defer m.traceProcessor.SymbolizationComplete(bpfTrace.KTime)
 	timestamp := libpf.UnixTime64(bpfTrace.KTime.UnixNano())
 

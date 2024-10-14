@@ -383,7 +383,7 @@ func (pm *ProcessManager) processRemovedMappings(pid libpf.PID, mappings []libpf
 	}
 
 	if _, ok := pm.interpreters[pid]; !ok {
-		log.Debugf("ProcessManager doesn't know about PID %d", pid)
+		// log.Debugf("ProcessManager doesn't know about PID %d", pid)
 		return
 	}
 

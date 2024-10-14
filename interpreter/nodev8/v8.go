@@ -1463,7 +1463,7 @@ func (sfi *v8SFI) scriptOffsetToLine(position sourcePosition) libpf.SourceLineno
 func (i *v8Instance) symbolize(symbolReporter reporter.SymbolReporter, sfi *v8SFI,
 	pos libpf.AddressOrLineno, lineNo libpf.SourceLineno) {
 	funcOffset := uint32(0)
-	if lineNo > sfi.funcStartLine {
+	if lineNo > sfi.funcStartLine {	
 		funcOffset = uint32(lineNo - sfi.funcStartLine)
 	}
 

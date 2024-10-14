@@ -38,7 +38,8 @@ const (
 // StartPIDEventProcessor spawns a goroutine to process PID events.
 func (t *Tracer) StartPIDEventProcessor(ctx context.Context) error {
 	go t.processPIDEvents(ctx)
-	return t.populatePIDs(ctx)
+	go t.populatePIDs(ctx)
+	return nil
 }
 
 // Process the PID events that are incoming in the Tracer channel.
@@ -73,7 +74,6 @@ func (t *Tracer) handleGenericPID() {
 // C structure in the received data is transformed to a Go structure and the event
 // handler is invoked.
 func (t *Tracer) triggerPidEvent(data []byte) {
-	fmt.Println("Trigger PID event")
 	event := (*C.Event)(unsafe.Pointer(&data[0]))
 	if event.event_type == support.EventTypeGenericPID {
 		t.handleGenericPID()

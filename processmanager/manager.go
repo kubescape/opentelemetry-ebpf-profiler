@@ -189,7 +189,6 @@ func (pm *ProcessManager) Close() {
 
 func (pm *ProcessManager) symbolizeFrame(frame int, trace *host.Trace,
 	newTrace *libpf.Trace) error {
-	fmt.Println("Starting symbolizeFrame")
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -198,7 +197,6 @@ func (pm *ProcessManager) symbolizeFrame(frame int, trace *host.Trace,
 	}
 
 	for _, instance := range pm.interpreters[trace.PID] {
-		fmt.Println("Starting symbolizeFrame for instance")
 		if err := instance.Symbolize(pm.reporter, &trace.Frames[frame], newTrace); err != nil {
 			if errors.Is(err, interpreter.ErrMismatchInterpreterType) {
 				// The interpreter type of instance did not match the type of frame.
@@ -226,7 +224,6 @@ func (pm *ProcessManager) ConvertTrace(trace *host.Trace) (newTrace *libpf.Trace
 		frame := &trace.Frames[i]
 
 		if frame.Type.IsError() {
-			fmt.Println("Error frame")
 			if !pm.filterErrorFrames {
 				newTrace.AppendFrame(frame.Type, libpf.UnsymbolizedFileID, frame.Lineno)
 			}
@@ -283,7 +280,6 @@ func (pm *ProcessManager) ConvertTrace(trace *host.Trace) (newTrace *libpf.Trace
 				relativeRIP, mappingStart, mappingEnd, fileOffset)
 		default:
 			err := pm.symbolizeFrame(i, trace, newTrace)
-			fmt.Println("Symbolize frame")
 			if err != nil {
 				log.Debugf(
 					"symbolization failed for PID %d, frame %d/%d, frame type %d: %v",

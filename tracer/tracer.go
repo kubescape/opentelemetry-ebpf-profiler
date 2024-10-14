@@ -644,10 +644,9 @@ func (t *Tracer) populatePIDs(ctx context.Context) error {
 			for {
 				select {
 				case <-ctx.Done():
-					fmt.Println("Context done")
 					return nil
 				case t.pidEvents <- pid:
-					fmt.Println("pidEvents")
+					time.Sleep(50 * time.Millisecond)
 					goto next_pid
 				default:
 					// Workaround to implement a non blocking send to a channel.

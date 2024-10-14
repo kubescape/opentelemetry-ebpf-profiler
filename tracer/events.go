@@ -74,7 +74,6 @@ func (t *Tracer) handleGenericPID() {
 // C structure in the received data is transformed to a Go structure and the event
 // handler is invoked.
 func (t *Tracer) triggerPidEvent(data []byte) {
-	fmt.Println("Trigger PID event")
 	event := (*C.Event)(unsafe.Pointer(&data[0]))
 	if event.event_type == support.EventTypeGenericPID {
 		t.handleGenericPID()

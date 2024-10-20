@@ -111,9 +111,9 @@ int process_php_frame(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted
 }
 
 static inline __attribute__((__always_inline__))
-int walk_php_stack(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted) {
+int walk_php_stack(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted, ProgramType programType) {
   const void *execute_data = record->phpUnwindState.zend_execute_data;
-  bool mixed_traces = get_next_unwinder_after_interpreter(record) != PROG_UNWIND_STOP;
+  bool mixed_traces = get_next_unwinder_after_interpreter(record) != get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
   // If PHP data is not available, all frames have been processed, then
   // continue with native unwinding.
@@ -121,7 +121,7 @@ int walk_php_stack(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted) {
     return get_next_unwinder_after_interpreter(record);
   }
 
-  int unwinder = PROG_UNWIND_PHP;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_PHP);
   u32 type_info = 0;
 #pragma unroll
   for (u32 i = 0; i < FRAMES_PER_WALK_PHP_STACK; ++i) {
@@ -165,7 +165,7 @@ int walk_php_stack(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted) {
         record->state.pc = phpinfo->jit_return_address;
         record->state.return_address = false;
         if (resolve_unwind_mapping(record, &unwinder) != ERR_OK) {
-          unwinder = PROG_UNWIND_STOP;
+          unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
         }
       } else {
         unwinder = get_next_unwinder_after_interpreter(record);
@@ -177,13 +177,14 @@ int walk_php_stack(PerCPURecord *record, PHPProcInfo *phpinfo, bool is_jitted) {
 
   if (!execute_data) {
   err:
-    unwinder_mark_done(record, PROG_UNWIND_PHP);
+    unwinder_mark_done(record, get_unwinder_by_program_type(programType, PROG_UNWIND_PHP));
   }
   record->phpUnwindState.zend_execute_data = execute_data;
   return unwinder;
 }
 
-static inline int unwind_php(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_php(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record)
@@ -234,11 +235,11 @@ static inline int unwind_php(struct pt_regs *ctx)
   DEBUG_PRINT("Building PHP stack (execute_data = 0x%lx)", (unsigned long) record->phpUnwindState.zend_execute_data);
 
   // Unwind one call stack or unrolled length, and continue
-  unwinder = walk_php_stack(record, phpinfo, is_jitted);
+  unwinder = walk_php_stack(record, phpinfo, is_jitted, programType);
 
 exit:
   tail_call(ctx, unwinder);
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_php, unwind_php, unwind_php)
+DEFINE_DUAL_PROGRAM(unwind_php, unwind_php);

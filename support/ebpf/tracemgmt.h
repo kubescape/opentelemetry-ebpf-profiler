@@ -9,6 +9,7 @@
 #include "frametypes.h"
 #include "types.h"
 #include "errors.h"
+#include "helpers.h"
 
 // increment_metric increments the value of the given metricID by 1
 static inline __attribute__((__always_inline__))
@@ -388,9 +389,9 @@ static inline int get_next_interpreter(PerCPURecord *record) {
 // get_next_unwinder_after_native_frame determines the next unwinder program to run
 // after a native stack frame has been unwound.
 static inline __attribute__((__always_inline__))
-ErrorCode get_next_unwinder_after_native_frame(PerCPURecord *record, int *unwinder) {
+ErrorCode get_next_unwinder_after_native_frame(PerCPURecord *record, int *unwinder, ProgramType programType) {
   UnwindState *state = &record->state;
-  *unwinder = PROG_UNWIND_STOP;
+  *unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
   if (state->pc == 0) {
     DEBUG_PRINT("Stopping unwind due to unwind failure (PC == 0)");
@@ -404,7 +405,7 @@ ErrorCode get_next_unwinder_after_native_frame(PerCPURecord *record, int *unwind
     return error;
   }
 
-  if (*unwinder == PROG_UNWIND_NATIVE) {
+  if (*unwinder == get_unwinder_by_program_type(programType, PROG_UNWIND_NATIVE)) {
     *unwinder = get_next_interpreter(record);
   }
 

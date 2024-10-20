@@ -245,7 +245,8 @@ push_frame:
 // unwind_dotnet is the entry point for tracing when invoked from the native tracer
 // or interpreter dispatcher. It does not reset the trace object and will append the
 // dotnet stack frames to the trace object for the current CPU.
-static inline int unwind_dotnet(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_dotnet(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record) {
@@ -255,8 +256,7 @@ static inline int unwind_dotnet(struct pt_regs *ctx)
   Trace *trace = &record->trace;
   u32 pid = trace->pid;
   DEBUG_PRINT("==== unwind_dotnet %d ====", trace->stack_len);
-
-  int unwinder = PROG_UNWIND_STOP;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
   ErrorCode error = ERR_OK;
   DotnetProcInfo *vi = bpf_map_lookup_elem(&dotnet_procs, &pid);
   if (!vi) {
@@ -271,15 +271,15 @@ static inline int unwind_dotnet(struct pt_regs *ctx)
 
 #pragma unroll
   for (int i = 0; i < DOTNET_FRAMES_PER_PROGRAM; i++) {
-    unwinder = PROG_UNWIND_STOP;
+    unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
     error = unwind_one_dotnet_frame(record, vi, i == 0);
     if (error) {
       break;
     }
 
-    error = get_next_unwinder_after_native_frame(record, &unwinder);
-    if (error || unwinder != PROG_UNWIND_DOTNET) {
+    error = get_next_unwinder_after_native_frame(record, &unwinder, programType);
+    if (error || unwinder != get_unwinder_by_program_type(programType, PROG_UNWIND_DOTNET)) {
       break;
     }
   }
@@ -291,4 +291,4 @@ exit:
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_dotnet, unwind_dotnet, unwind_dotnet);
+DEFINE_DUAL_PROGRAM(unwind_dotnet, unwind_dotnet);

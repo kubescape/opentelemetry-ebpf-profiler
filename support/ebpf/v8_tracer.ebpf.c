@@ -285,7 +285,8 @@ frame_done:
 // unwind_v8 is the entry point for tracing when invoked from the native tracer
 // or interpreter dispatcher. It does not reset the trace object and will append the
 // V8 stack frames to the trace object for the current CPU.
-static inline int unwind_v8(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_v8(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record) {
@@ -296,7 +297,7 @@ static inline int unwind_v8(struct pt_regs *ctx)
   u32 pid = trace->pid;
   DEBUG_PRINT("==== unwind_v8 %d ====", trace->stack_len);
 
-  int unwinder = PROG_UNWIND_STOP;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
   ErrorCode error = ERR_OK;
   V8ProcInfo *vi = bpf_map_lookup_elem(&v8_procs, &pid);
   if (!vi) {
@@ -310,15 +311,15 @@ static inline int unwind_v8(struct pt_regs *ctx)
 
 #pragma unroll
   for (int i = 0; i < V8_FRAMES_PER_PROGRAM; i++) {
-    unwinder = PROG_UNWIND_STOP;
+    unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
     error = unwind_one_v8_frame(record, vi, i == 0);
     if (error) {
       break;
     }
 
-    error = get_next_unwinder_after_native_frame(record, &unwinder);
-    if (error || unwinder != PROG_UNWIND_V8) {
+    error = get_next_unwinder_after_native_frame(record, &unwinder, programType);
+    if (error || unwinder != get_unwinder_by_program_type(programType, PROG_UNWIND_V8)) {
       break;
     }
   }
@@ -330,4 +331,4 @@ exit:
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_v8, unwind_v8, unwind_v8);
+DEFINE_DUAL_PROGRAM(unwind_v8, unwind_v8);

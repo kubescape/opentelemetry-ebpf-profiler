@@ -28,6 +28,7 @@ const (
 )
 
 const (
+	// Perf programs indexes.
 	ProgUnwindStop    = C.PROG_UNWIND_STOP
 	ProgUnwindNative  = C.PROG_UNWIND_NATIVE
 	ProgUnwindHotspot = C.PROG_UNWIND_HOTSPOT
@@ -37,6 +38,17 @@ const (
 	ProgUnwindPerl    = C.PROG_UNWIND_PERL
 	ProgUnwindV8      = C.PROG_UNWIND_V8
 	ProgUnwindDotnet  = C.PROG_UNWIND_DOTNET
+
+	// Kprobe programs indexes.
+	ProgKprobeUnwindStop    = C.PROG_KPROBE_UNWIND_STOP
+	ProgKprobeUnwindNative  = C.PROG_KPROBE_UNWIND_NATIVE
+	ProgKprobeUnwindHotspot = C.PROG_KPROBE_UNWIND_HOTSPOT
+	ProgKprobeUnwindPython  = C.PROG_KPROBE_UNWIND_PYTHON
+	ProgKprobeUnwindPHP     = C.PROG_KPROBE_UNWIND_PHP
+	ProgKprobeUnwindRuby    = C.PROG_KPROBE_UNWIND_RUBY
+	ProgKprobeUnwindPerl    = C.PROG_KPROBE_UNWIND_PERL
+	ProgKprobeUnwindV8      = C.PROG_KPROBE_UNWIND_V8
+	ProgKprobeUnwindDotnet  = C.PROG_KPROBE_UNWIND_DOTNET
 )
 
 const (

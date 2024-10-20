@@ -52,7 +52,7 @@ ErrorCode push_ruby(Trace *trace, u64 file, u64 line) {
 // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/vm_core.h#L456
 static inline __attribute__((__always_inline__))
 ErrorCode walk_ruby_stack(PerCPURecord *record, const RubyProcInfo *rubyinfo, 
-                          const void *current_ctx_addr, int* next_unwinder) {
+                          const void *current_ctx_addr, int* next_unwinder, ProgramType programType) {
   if (!current_ctx_addr) {
     *next_unwinder = get_next_unwinder_after_interpreter(record);
     return ERR_OK;
@@ -60,7 +60,7 @@ ErrorCode walk_ruby_stack(PerCPURecord *record, const RubyProcInfo *rubyinfo,
 
   Trace *trace = &record->trace;
 
-  *next_unwinder = PROG_UNWIND_STOP;
+  *next_unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
   // stack_ptr points to the frame of the Ruby VM call stack that will be unwound next
   void *stack_ptr = record->rubyUnwindState.stack_ptr;
@@ -154,7 +154,7 @@ ErrorCode walk_ruby_stack(PerCPURecord *record, const RubyProcInfo *rubyinfo,
       }
 
       stack_ptr += rubyinfo->size_of_control_frame_struct;
-      *next_unwinder = PROG_UNWIND_NATIVE;
+      *next_unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_NATIVE);
       goto save_state;
     }
 
@@ -201,12 +201,12 @@ ErrorCode walk_ruby_stack(PerCPURecord *record, const RubyProcInfo *rubyinfo,
   skip:
     if (last_stack_frame <= stack_ptr ) {
       // We have processed all frames in the Ruby VM and can stop here.
-      *next_unwinder = PROG_UNWIND_NATIVE;
+      *next_unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_NATIVE);
       return ERR_OK;
     }
     stack_ptr += rubyinfo->size_of_control_frame_struct;
   }
-  *next_unwinder = PROG_UNWIND_RUBY;
+  *next_unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_RUBY);
 
 save_state:
   // Store the current progress in the Ruby unwind state so we can continue walking the stack
@@ -217,7 +217,8 @@ save_state:
   return ERR_OK;
 }
 
-static inline int unwind_ruby(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_ruby(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record)
@@ -267,7 +268,7 @@ static inline int unwind_ruby(struct pt_regs *ctx)
     goto exit;
   }
 
-  error = walk_ruby_stack(record, rubyinfo, current_ctx_addr, &unwinder);
+  error = walk_ruby_stack(record, rubyinfo, current_ctx_addr, &unwinder, programType);
 
 exit:
   record->state.unwind_error = error;
@@ -275,4 +276,4 @@ exit:
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_ruby, unwind_ruby, unwind_ruby);
+DEFINE_DUAL_PROGRAM(unwind_ruby, unwind_ruby);

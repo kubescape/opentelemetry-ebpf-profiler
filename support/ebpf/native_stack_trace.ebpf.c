@@ -748,7 +748,8 @@ static inline ErrorCode get_usermode_regs(struct pt_regs *ctx,
 
 #endif
 
-static inline int unwind_native(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_native(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record)
@@ -759,7 +760,7 @@ static inline int unwind_native(struct pt_regs *ctx)
   ErrorCode error;
 #pragma unroll
   for (int i = 0; i < NATIVE_FRAMES_PER_PROGRAM; i++) {
-    unwinder = PROG_UNWIND_STOP;
+    unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
     // Unwind native code
     u32 frame_idx = trace->stack_len;
@@ -786,8 +787,8 @@ static inline int unwind_native(struct pt_regs *ctx)
 
     // Continue unwinding
     DEBUG_PRINT(" pc: %llx sp: %llx fp: %llx", record->state.pc, record->state.sp, record->state.fp);
-    error = get_next_unwinder_after_native_frame(record, &unwinder);
-    if (error || unwinder != PROG_UNWIND_NATIVE) {
+    error = get_next_unwinder_after_native_frame(record, &unwinder, programType);
+    if (error || unwinder != get_unwinder_by_program_type(programType, PROG_UNWIND_NATIVE)) {
       break;
     }
   }
@@ -800,10 +801,10 @@ static inline int unwind_native(struct pt_regs *ctx)
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_native, unwind_native, unwind_native);
+DEFINE_DUAL_PROGRAM(unwind_native, unwind_native);
 
-static inline
-int collect_trace(struct pt_regs *ctx) {
+static inline __attribute__((__always_inline__))
+int collect_trace(struct pt_regs *ctx, ProgramType programType) {
   // Get the PID and TGID register.
   u64 id = bpf_get_current_pid_tgid();
   u32 pid = id >> 32;
@@ -838,7 +839,7 @@ int collect_trace(struct pt_regs *ctx) {
   DEBUG_PRINT("kernel stack id = %d", trace->kernel_stack_id);
 
   // Recursive unwind frames
-  int unwinder = PROG_UNWIND_STOP;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
   bool has_usermode_regs = false;
   ErrorCode error = get_usermode_regs(ctx, &record->state, &has_usermode_regs);
   if (error || !has_usermode_regs) {
@@ -851,7 +852,7 @@ int collect_trace(struct pt_regs *ctx) {
     }
     return 0;
   }
-  error = get_next_unwinder_after_native_frame(record, &unwinder);
+  error = get_next_unwinder_after_native_frame(record, &unwinder, programType);
 
 exit:
   record->state.unwind_error = error;
@@ -861,13 +862,13 @@ exit:
 }
 
 SEC("perf_event/native_tracer_entry")
-int native_tracer_entry_perf(struct bpf_perf_event_data *ctx)
+int native_tracer_entry_perf(struct bpf_perf_event_data *ctx, ProgramType programType)
 {
-  return collect_trace((struct pt_regs*) &ctx->regs);
+  return collect_trace((struct pt_regs*) &ctx->regs, programType);
 }
 
 SEC("kprobe/native_tracer_entry")
-int native_tracer_entry_kprobe(struct pt_regs *ctx)
+int native_tracer_entry_kprobe(struct pt_regs *ctx, ProgramType programType)
 {
-  return collect_trace(ctx);
+  return collect_trace(ctx, programType);
 }

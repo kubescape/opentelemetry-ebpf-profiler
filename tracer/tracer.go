@@ -508,7 +508,6 @@ func loadUnwinders(coll *cebpf.CollectionSpec, ebpfProgs map[string]*cebpf.Progr
 		return fmt.Errorf("failed to adjust rlimit: %v", err)
 	}
 	defer restoreRlimit()
-
 	type prog struct {
 		// enable tells whether a prog shall be loaded.
 		enable bool
@@ -519,55 +518,99 @@ func loadUnwinders(coll *cebpf.CollectionSpec, ebpfProgs map[string]*cebpf.Progr
 		// noTailCallTarget indicates if this eBPF program should be added to the tailcallMap.
 		noTailCallTarget bool
 	}
-
 	programOptions := cebpf.ProgramOptions{
 		LogLevel: cebpf.LogLevel(bpfVerifierLogLevel),
 	}
-
 	for _, unwindProg := range []prog{
 		{
 			progID: uint32(support.ProgUnwindStop),
-			name:   "unwind_stop",
+			name:   "unwind_stop_perf",
 			enable: true,
 		},
 		{
 			progID: uint32(support.ProgUnwindNative),
-			name:   "unwind_native",
+			name:   "unwind_native_perf",
 			enable: true,
 		},
 		{
 			progID: uint32(support.ProgUnwindHotspot),
-			name:   "unwind_hotspot",
+			name:   "unwind_hotspot_perf",
 			enable: includeTracers.Has(types.HotspotTracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindPerl),
-			name:   "unwind_perl",
+			name:   "unwind_perl_perf",
 			enable: includeTracers.Has(types.PerlTracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindPHP),
-			name:   "unwind_php",
+			name:   "unwind_php_perf",
 			enable: includeTracers.Has(types.PHPTracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindPython),
-			name:   "unwind_python",
+			name:   "unwind_python_perf",
 			enable: includeTracers.Has(types.PythonTracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindRuby),
-			name:   "unwind_ruby",
+			name:   "unwind_ruby_perf",
 			enable: includeTracers.Has(types.RubyTracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindV8),
-			name:   "unwind_v8",
+			name:   "unwind_v8_perf",
 			enable: includeTracers.Has(types.V8Tracer),
 		},
 		{
 			progID: uint32(support.ProgUnwindDotnet),
-			name:   "unwind_dotnet",
+			name:   "unwind_dotnet_perf",
+			enable: includeTracers.Has(types.DotnetTracer),
+		},
+		// Kprobe programs
+		{
+			progID: uint32(support.ProgKprobeUnwindStop),
+			name:   "unwind_stop_kprobe",
+			enable: true,
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindNative),
+			name:   "unwind_native_kprobe",
+			enable: true,
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindHotspot),
+			name:   "unwind_hotspot_kprobe",
+			enable: includeTracers.Has(types.HotspotTracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindPerl),
+			name:   "unwind_perl_kprobe",
+			enable: includeTracers.Has(types.PerlTracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindPHP),
+			name:   "unwind_php_kprobe",
+			enable: includeTracers.Has(types.PHPTracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindPython),
+			name:   "unwind_python_kprobe",
+			enable: includeTracers.Has(types.PythonTracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindRuby),
+			name:   "unwind_ruby_kprobe",
+			enable: includeTracers.Has(types.RubyTracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindV8),
+			name:   "unwind_v8_kprobe",
+			enable: includeTracers.Has(types.V8Tracer),
+		},
+		{
+			progID: uint32(support.ProgKprobeUnwindDotnet),
+			name:   "unwind_dotnet_kprobe",
 			enable: includeTracers.Has(types.DotnetTracer),
 		},
 		{
@@ -584,11 +627,11 @@ func loadUnwinders(coll *cebpf.CollectionSpec, ebpfProgs map[string]*cebpf.Progr
 		if !unwindProg.enable {
 			continue
 		}
-
 		// Load the eBPF program into the kernel. If no error is returned,
 		// the eBPF program can be used/called/triggered from now on.
 		unwinder, err := cebpf.NewProgramWithOptions(coll.Programs[unwindProg.name],
 			programOptions)
+		fmt.Println(unwindProg.name)
 		if err != nil {
 			// These errors tend to have hundreds of lines (or more),
 			// so we print each line individually.
@@ -604,12 +647,12 @@ func loadUnwinders(coll *cebpf.CollectionSpec, ebpfProgs map[string]*cebpf.Progr
 			}
 			return fmt.Errorf("failed to load %s", unwindProg.name)
 		}
-
 		ebpfProgs[unwindProg.name] = unwinder
 		fd := uint32(unwinder.FD())
 		if unwindProg.noTailCallTarget {
 			continue
 		}
+		fmt.Println(fd, unwindProg.progID)
 		if err := tailcallMap.Update(unsafe.Pointer(&unwindProg.progID), unsafe.Pointer(&fd),
 			cebpf.UpdateAny); err != nil {
 			// Every eBPF program that is loaded within loadUnwinders can be the
@@ -618,7 +661,6 @@ func loadUnwinders(coll *cebpf.CollectionSpec, ebpfProgs map[string]*cebpf.Progr
 			return fmt.Errorf("failed to update tailcall map: %v", err)
 		}
 	}
-
 	return nil
 }
 

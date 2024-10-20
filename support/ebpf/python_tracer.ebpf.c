@@ -155,10 +155,10 @@ push_frame:
 }
 
 static inline __attribute__((__always_inline__))
-ErrorCode walk_python_stack(PerCPURecord *record, const PyProcInfo *pyinfo, int *unwinder) {
+ErrorCode walk_python_stack(PerCPURecord *record, const PyProcInfo *pyinfo, int *unwinder, ProgramType programType) {
   void *py_frame = record->pythonUnwindState.py_frame;
   ErrorCode error = ERR_OK;
-  *unwinder = PROG_UNWIND_STOP;
+  *unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
 
 #pragma unroll
   for (u32 i = 0; i < FRAMES_PER_WALK_PYTHON_STACK; ++i) {
@@ -176,12 +176,12 @@ ErrorCode walk_python_stack(PerCPURecord *record, const PyProcInfo *pyinfo, int 
     }
   }
 
-  *unwinder = PROG_UNWIND_PYTHON;
+  *unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_PYTHON);
 
 stop:
   // Set up the state for the next invocation of this unwinding program.
   if (error || !py_frame) {
-    unwinder_mark_done(record, PROG_UNWIND_PYTHON);
+    unwinder_mark_done(record, get_unwinder_by_program_type(programType, PROG_UNWIND_PYTHON));
   }
   record->pythonUnwindState.py_frame = py_frame;
   return error;
@@ -277,7 +277,8 @@ ErrorCode get_PyFrame(const PyProcInfo *pyinfo, void **frame) {
 // unwind_python is the entry point for tracing when invoked from the native tracer
 // or interpreter dispatcher. It does not reset the trace object and will append the
 // Python stack frames to the trace object for the current CPU.
-static inline int unwind_python(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_python(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record)
@@ -308,11 +309,11 @@ static inline int unwind_python(struct pt_regs *ctx)
   }
   if (!record->pythonUnwindState.py_frame) {
     DEBUG_PRINT("  -> Python frames are handled");
-    unwinder_mark_done(record, PROG_UNWIND_PYTHON);
+    unwinder_mark_done(record, get_unwinder_by_program_type(programType, PROG_UNWIND_PYTHON));
     goto exit;
   }
 
-  error = walk_python_stack(record, pyinfo, &unwinder);
+  error = walk_python_stack(record, pyinfo, &unwinder, programType);
 
 exit:
   record->state.unwind_error = error;
@@ -320,4 +321,4 @@ exit:
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_python, unwind_python, unwind_python);
+DEFINE_DUAL_PROGRAM(unwind_python, unwind_python);

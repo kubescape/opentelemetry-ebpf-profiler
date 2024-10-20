@@ -319,6 +319,7 @@ enum {
 // map that holds them.
 // The values of this enum must fit in a single byte.
 typedef enum TracePrograms {
+  // Perf event unwind programs
   PROG_UNWIND_STOP,
   PROG_UNWIND_NATIVE,
   PROG_UNWIND_HOTSPOT,
@@ -328,7 +329,19 @@ typedef enum TracePrograms {
   PROG_UNWIND_RUBY,
   PROG_UNWIND_V8,
   PROG_UNWIND_DOTNET,
-  NUM_TRACER_PROGS,
+
+  // Kprobe unwind programs
+  PROG_KPROBE_UNWIND_STOP,
+  PROG_KPROBE_UNWIND_NATIVE,
+  PROG_KPROBE_UNWIND_HOTSPOT,
+  PROG_KPROBE_UNWIND_PERL,
+  PROG_KPROBE_UNWIND_PYTHON,
+  PROG_KPROBE_UNWIND_PHP,
+  PROG_KPROBE_UNWIND_RUBY,
+  PROG_KPROBE_UNWIND_V8,
+  PROG_KPROBE_UNWIND_DOTNET,
+
+  NUM_TRACER_PROGS, // To keep track of the number of programs
 } TracePrograms;
 
 // MAX_FRAME_UNWINDS defines the maximum number of frames per

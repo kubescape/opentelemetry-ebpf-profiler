@@ -166,9 +166,9 @@ err:
 }
 
 static inline __attribute__((__always_inline__))
-int process_perl_frame(PerCPURecord *record, const PerlProcInfo *perlinfo, const void *cx) {
+int process_perl_frame(PerCPURecord *record, const PerlProcInfo *perlinfo, const void *cx, ProgramType programType) {
   Trace *trace = &record->trace;
-  int unwinder = PROG_UNWIND_PERL;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_PERL);
 
   // Per S_dopoptosub_at() we are interested only in specific SUB/FORMAT
   // context entries. Others are non-functions, or helper entries.
@@ -198,7 +198,7 @@ int process_perl_frame(PerCPURecord *record, const PerlProcInfo *perlinfo, const
       return unwinder;
     }
 
-    if (get_next_unwinder_after_interpreter(record) != PROG_UNWIND_STOP) {
+    if (get_next_unwinder_after_interpreter(record) != get_unwinder_by_program_type(programType, PROG_UNWIND_STOP)) {
       // If generating mixed traces, use 'sub_retop' to detect if this is the
       // C->Perl boundary. This is the value returned as next opcode at
       //   https://github.com/Perl/perl5/blob/v5.32.0/pp_hot.c#L4952-L4955
@@ -225,7 +225,7 @@ int process_perl_frame(PerCPURecord *record, const PerlProcInfo *perlinfo, const
       goto err;
     }
     if (push_perl(trace, (u64)egv, (u64)record->perlUnwindState.cop) != ERR_OK) {
-      return PROG_UNWIND_STOP;
+      return get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
     }
     record->perlUnwindState.cop = 0;
     break;
@@ -254,11 +254,11 @@ err:
   // happened, and rest of the reads should be just fine.
   DEBUG_PRINT("Failed to read context stack entry at %p", cx);
   increment_metric(metricID_UnwindPerlReadContextStackEntry);
-  return PROG_UNWIND_PERL;
+  return get_unwinder_by_program_type(programType, PROG_UNWIND_PERL);
 }
 
 static inline __attribute__((__always_inline__))
-void prepare_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
+void prepare_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo, ProgramType programType) {
   const void *si = record->perlUnwindState.stackinfo;
   // cxstack contains the base of the current context stack which is an array of PERL_CONTEXT
   // structures, while cxstack_ix is the index of the current frame within that stack.
@@ -268,7 +268,7 @@ void prepare_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
   if (bpf_probe_read_user(&cxstack, sizeof(cxstack), si + perlinfo->si_cxstack) ||
       bpf_probe_read_user(&cxix, sizeof(cxix), si + perlinfo->si_cxix)) {
     DEBUG_PRINT("Failed to read stackinfo at 0x%lx", (unsigned long)si);
-    unwinder_mark_done(record, PROG_UNWIND_PERL);
+    unwinder_mark_done(record, get_unwinder_by_program_type(programType, PROG_UNWIND_PERL));
     increment_metric(metricID_UnwindPerlReadStackInfo);
     return;
   }
@@ -279,7 +279,7 @@ void prepare_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
 }
 
 static inline __attribute__((__always_inline__))
-int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
+int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo, ProgramType programType) {
   const void *si = record->perlUnwindState.stackinfo;
 
   // If Perl stackinfo is not available, all frames have been processed, then
@@ -288,7 +288,7 @@ int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
     return get_next_unwinder_after_interpreter(record);
   }
 
-  int unwinder = PROG_UNWIND_PERL;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_PERL);
   const void *cxbase = record->perlUnwindState.cxbase;
 #pragma unroll
   for (u32 i = 0; i < PERL_FRAMES_PER_PROGRAM; ++i) {
@@ -299,14 +299,14 @@ int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
       break;
     }
     // Parse one context stack entry.
-    unwinder = process_perl_frame(record, perlinfo, record->perlUnwindState.cxcur);
+    unwinder = process_perl_frame(record, perlinfo, record->perlUnwindState.cxcur, programType);
     record->perlUnwindState.cxcur -= perlinfo->context_sizeof;
-    if (unwinder == PROG_UNWIND_STOP) {
+    if (unwinder == get_unwinder_by_program_type(programType, PROG_UNWIND_STOP)) {
       // Failed to read context stack entry.
       break;
     }
     increment_metric(metricID_UnwindPerlFrames);
-    if (unwinder != PROG_UNWIND_PERL) {
+    if (unwinder != get_unwinder_by_program_type(programType, PROG_UNWIND_PERL)) {
       // Perl context frame which returns to next native frame.
       break;
     }
@@ -323,7 +323,7 @@ int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
     if (cop) {
       DEBUG_PRINT("End of perl stack - pushing main 0x%lx", (unsigned long)cop);
       if (push_perl(trace, 0, cop) != ERR_OK) {
-        return PROG_UNWIND_STOP;
+        return get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
       }
       record->perlUnwindState.cop = 0;
     }
@@ -338,11 +338,11 @@ int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
         si == NULL) {
       // Stop walking stacks if main stack is finished, or something went wrong.
       DEBUG_PRINT("Perl stackinfos done");
-      unwinder_mark_done(record, PROG_UNWIND_PERL);
+      unwinder_mark_done(record, get_unwinder_by_program_type(programType, PROG_UNWIND_PERL));
     } else {
       DEBUG_PRINT("Perl next stackinfo: type %d", type);
       record->perlUnwindState.stackinfo = si;
-      prepare_perl_stack(record, perlinfo);
+      prepare_perl_stack(record, perlinfo, programType);
     }
     unwinder = get_next_unwinder_after_interpreter(record);
   }
@@ -357,7 +357,8 @@ int walk_perl_stack(PerCPURecord *record, const PerlProcInfo *perlinfo) {
 // unwind_perl is the entry point for tracing when invoked from the native tracer
 // or interpreter dispatcher. It does not reset the trace object and will append the
 // Perl stack frames to the trace object for the current CPU.
-static inline int unwind_perl(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_perl(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record) {
@@ -417,15 +418,15 @@ static inline int unwind_perl(struct pt_regs *ctx)
     }
     DEBUG_PRINT("COP from interpreter state 0x%lx", (unsigned long)record->perlUnwindState.cop);
 
-    prepare_perl_stack(record, perlinfo);
+    prepare_perl_stack(record, perlinfo, programType);
   }
 
   // Unwind one call stack or unrolled length, and continue
-  unwinder = walk_perl_stack(record, perlinfo);
+  unwinder = walk_perl_stack(record, perlinfo, programType);
 
 exit:
   tail_call(ctx, unwinder);
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_perl, unwind_perl, unwind_perl);
+DEFINE_DUAL_PROGRAM(unwind_perl, unwind_perl);

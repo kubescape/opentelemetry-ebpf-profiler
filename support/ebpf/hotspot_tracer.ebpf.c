@@ -116,7 +116,7 @@ u64 calc_line(u8 subtype, u32 pc_or_bci, u32 ptr_check) {
 #ifdef __x86_64__
 // hotspot_addr_in_codecache checks if given address belongs to the JVM JIT code cache
 __attribute__((always_inline)) inline static
-bool hotspot_addr_in_codecache(u32 pid, u64 addr) {
+bool hotspot_addr_in_codecache(u32 pid, u64 addr, ProgramType programType) {
   PIDPage key = {};
   key.prefixLen = BIT_WIDTH_PID + BIT_WIDTH_PAGE;
   key.pid = __constant_cpu_to_be32(pid);
@@ -132,7 +132,7 @@ bool hotspot_addr_in_codecache(u32 pid, u64 addr) {
   int program;
   u64 bias;
   decode_bias_and_unwind_program(val->bias_and_unwind_program, &bias, &program);
-  return program == PROG_UNWIND_HOTSPOT;
+  return program == get_unwinder_by_program_type(programType, PROG_UNWIND_HOTSPOT);
 }
 #endif
 
@@ -567,7 +567,7 @@ pattern_found:;
 __attribute__((always_inline)) inline static
 ErrorCode hotspot_handle_nmethod(const CodeBlobInfo *cbi, Trace *trace,
                                  HotspotUnwindInfo *ui, HotspotProcInfo *ji,
-                                 HotspotUnwindAction *action, bool topmost) {
+                                 HotspotUnwindAction *action, bool topmost, ProgramType programType) {
   // setup frame subtype, and get the native method _compile_id as pointer cookie
   // as it is unique to the compilation result
 
@@ -654,7 +654,7 @@ ErrorCode hotspot_handle_nmethod(const CodeBlobInfo *cbi, Trace *trace,
   bpf_probe_read_user(stack, sizeof(stack), (void*)(ui->sp - sizeof(u64)));
   for (int i = 0; i < HOTSPOT_RA_SEARCH_SLOTS; i++, ui->sp += sizeof(u64)) {
     DEBUG_PRINT("jvm:    -> %u pc candidate 0x%lx", i, (unsigned long)stack[i]);
-    if (hotspot_addr_in_codecache(trace->pid, stack[i])) {
+    if (hotspot_addr_in_codecache(trace->pid, stack[i], programType)) {
       DEBUG_PRINT("jvm:  -> unwinding complete frame + %d words", i);
       *action = UA_UNWIND_REGS;
       return ERR_OK;
@@ -841,7 +841,7 @@ read_error_exit:
 }
 
 // hotspot_unwind_one_frame fully unwinds one HotSpot frame
-static ErrorCode hotspot_unwind_one_frame(PerCPURecord *record, HotspotProcInfo *ji, bool maybe_topmost) {
+static ErrorCode hotspot_unwind_one_frame(PerCPURecord *record, HotspotProcInfo *ji, bool maybe_topmost, ProgramType programType) {
   UnwindState *state = &record->state;
   Trace *trace = &record->trace;
   HotspotUnwindInfo ui;
@@ -869,7 +869,7 @@ static ErrorCode hotspot_unwind_one_frame(PerCPURecord *record, HotspotProcInfo 
   case FRAMETYPE_nmethod: // JIT-compiled method
   case FRAMETYPE_native_nmethod: // stub to call C-implemented java method
     err = hotspot_handle_nmethod(&cbi, trace, &ui, ji, &action,
-      maybe_topmost && !state->return_address);
+      maybe_topmost && !state->return_address, programType);
     break;
   case FRAMETYPE_Interpreter: // main Interpreter program running byte code
     err = hotspot_handle_interpreter(state, trace, &ui, ji, &action);
@@ -891,7 +891,8 @@ static ErrorCode hotspot_unwind_one_frame(PerCPURecord *record, HotspotProcInfo 
 // unwind_hotspot is the entry point for tracing when invoked from the native tracer
 // and it recursive unwinds all HotSpot frames and then jumps back to unwind further
 // native frames that follow.
-static inline int unwind_hotspot(struct pt_regs *ctx)
+static inline __attribute__((__always_inline__))
+int unwind_hotspot(struct pt_regs *ctx, ProgramType programType)
 {
   PerCPURecord *record = get_per_cpu_record();
   if (!record)
@@ -907,18 +908,18 @@ static inline int unwind_hotspot(struct pt_regs *ctx)
     return 0;
   }
 
-  int unwinder = PROG_UNWIND_STOP;
+  int unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
   ErrorCode error = ERR_OK;
 #pragma unroll
   for (int i = 0; i < HOTSPOT_FRAMES_PER_PROGRAM; i++) {
-    unwinder = PROG_UNWIND_STOP;
-    error = hotspot_unwind_one_frame(record, ji, i == 0);
+    unwinder = get_unwinder_by_program_type(programType, PROG_UNWIND_STOP);
+    error = hotspot_unwind_one_frame(record, ji, i == 0, programType);
     if (error) {
       break;
     }
 
-    error = get_next_unwinder_after_native_frame(record, &unwinder);
-    if (error || unwinder != PROG_UNWIND_HOTSPOT) {
+    error = get_next_unwinder_after_native_frame(record, &unwinder, programType);
+    if (error || unwinder != get_unwinder_by_program_type(programType, PROG_UNWIND_HOTSPOT)) {
       break;
     }
   }
@@ -929,4 +930,4 @@ static inline int unwind_hotspot(struct pt_regs *ctx)
   return -1;
 }
 
-DEFINE_DUAL_PROGRAM(unwind_hotspot, unwind_hotspot, unwind_hotspot);
+DEFINE_DUAL_PROGRAM(unwind_hotspot, unwind_hotspot);
